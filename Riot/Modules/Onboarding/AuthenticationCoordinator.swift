@@ -18,18 +18,35 @@
 
 import UIKit
 
+@available(iOS 14.0, *)
+struct AuthenticationCoordinatorParameters {
+    let navigationRouter: NavigationRouterType
+    let initialScreen: AuthenticationCoordinator.EntryPoint
+    /// Whether or not the coordinator should show the loading spinner, key verification etc.
+    let canPresentAdditionalScreens: Bool
+}
+
 /// A coordinator that handles authentication, verification and setting a PIN.
+@available(iOS 14.0, *)
 final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtocol {
+    
+    enum EntryPoint {
+        case registration
+        case selectServerForRegistration
+        case login
+    }
     
     // MARK: - Properties
     
     // MARK: Private
     
     private let navigationRouter: NavigationRouterType
+    private let authenticationService = AuthenticationService.shared
     
-    private let authenticationViewController: AuthenticationViewController
+    private let initialScreen: EntryPoint
     private var canPresentAdditionalScreens: Bool
     private var isWaitingToPresentCompleteSecurity = false
+    
     private let crossSigningService = CrossSigningService()
     
     /// The password entered, for use when setting up cross-signing.
@@ -43,25 +60,12 @@ final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtoc
     var childCoordinators: [Coordinator] = []
     var completion: ((AuthenticationCoordinatorResult) -> Void)?
     
-    var customServerFieldsVisible = false {
-        didSet {
-            guard customServerFieldsVisible != oldValue else { return }
-            authenticationViewController.setCustomServerFieldsVisible(customServerFieldsVisible)
-        }
-    }
-    
     // MARK: - Setup
     
     init(parameters: AuthenticationCoordinatorParameters) {
         self.navigationRouter = parameters.navigationRouter
+        self.initialScreen = parameters.initialScreen
         self.canPresentAdditionalScreens = parameters.canPresentAdditionalScreens
-        
-        let authenticationViewController = AuthenticationViewController()
-        self.authenticationViewController = authenticationViewController
-        
-        // Preload the view as this can a second and lock up the UI at presentation.
-        // The coordinator is initialised early in the onboarding flow to take advantage of this.
-        authenticationViewController.loadViewIfNeeded()
         
         super.init()
     }
@@ -69,32 +73,18 @@ final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtoc
     // MARK: - Public
     
     func start() {
-        // Listen to the end of the authentication flow
-        authenticationViewController.authVCDelegate = self
+        switch initialScreen {
+        case .registration:
+            showRegistrationScreen()
+        case .selectServerForRegistration:
+            showServerSelectionScreen()
+        case .login:
+            showLoginScreen()
+        }
     }
     
     func toPresentable() -> UIViewController {
-        return self.authenticationViewController
-    }
-    
-    func update(authenticationType: MXKAuthenticationType) {
-        authenticationViewController.authType = authenticationType
-    }
-    
-    func update(externalRegistrationParameters: [AnyHashable: Any]) {
-        authenticationViewController.externalRegistrationParameters = externalRegistrationParameters
-    }
-    
-    func update(softLogoutCredentials: MXCredentials) {
-        authenticationViewController.softLogoutCredentials = softLogoutCredentials
-    }
-    
-    func updateHomeserver(_ homeserver: String?, andIdentityServer identityServer: String?) {
-        authenticationViewController.showCustomHomeserver(homeserver, andIdentityServer: identityServer)
-    }
-    
-    func continueSSOLogin(withToken loginToken: String, transactionID: String) -> Bool {
-        authenticationViewController.continueSSOLogin(withToken: loginToken, txnId: transactionID)
+        navigationRouter.toPresentable()
     }
     
     func presentPendingScreensIfNecessary() {
@@ -110,6 +100,42 @@ final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtoc
     
     // MARK: - Private
     
+    private func showRegistrationScreen() {
+        let parameters = AuthenticationRegistrationCoordinatorParameters(authenticationService: authenticationService)
+        let coordinator = AuthenticationRegistrationCoordinator(parameters: parameters)
+        coordinator.completion = { [weak self, weak coordinator] result in
+            guard let self = self, let coordinator = coordinator else { return }
+            self.registrationCoordinator(coordinator, didCompleteWith: result)
+        }
+        
+        coordinator.start()
+        add(childCoordinator: coordinator)
+        
+        if navigationRouter.modules.isEmpty {
+            navigationRouter.setRootModule(coordinator, popCompletion: nil)
+        } else {
+            navigationRouter.push(coordinator, animated: true) { [weak self] in
+                self?.remove(childCoordinator: coordinator)
+            }
+        }
+    }
+    
+    /// Displays the next view in the flow after the use case screen.
+    @available(iOS 14.0, *)
+    private func registrationCoordinator(_ coordinator: AuthenticationRegistrationCoordinator, didCompleteWith result: AuthenticationRegistrationCoordinatorResult) {
+        
+    }
+    
+    private func showServerSelectionScreen() {
+        
+    }
+    
+    private func showLoginScreen() {
+        
+    }
+    
+    // MARK: - Additional Screens
+    
     private func showLoadingAnimation() {
         let loadingViewController = LaunchLoadingViewController()
         loadingViewController.modalPresentationStyle = .fullScreen
@@ -121,7 +147,7 @@ final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtoc
     
     private func presentCompleteSecurity() {
         guard let session = session else {
-            MXLog.error("[AuthenticationCoordinator] presentCompleteSecurity: Unable to present security due to missing session.")
+            MXLog.error("[LegacyAuthenticationCoordinator] presentCompleteSecurity: Unable to present security due to missing session.")
             authenticationDidComplete()
             return
         }
@@ -152,7 +178,7 @@ final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtoc
                                       
     @objc private func sessionStateDidChange(_ notification: Notification) {
         guard let session = notification.object as? MXSession else {
-            MXLog.error("[AuthenticationCoordinator] sessionStateDidChange: Missing session in the notification")
+            MXLog.error("[LegacyAuthenticationCoordinator] sessionStateDidChange: Missing session in the notification")
             return
         }
 
@@ -170,7 +196,7 @@ final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtoc
                 crossSigning.refreshState { [weak self] stateUpdated in
                     guard let self = self else { return }
                     
-                    MXLog.debug("[AuthenticationCoordinator] sessionStateDidChange: crossSigning.state: \(crossSigning.state)")
+                    MXLog.debug("[LegacyAuthenticationCoordinator] sessionStateDidChange: crossSigning.state: \(crossSigning.state)")
                     
                     switch crossSigning.state {
                     case .notBootstrapped:
@@ -181,23 +207,23 @@ final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtoc
                             // Bootstrap cross-signing on user's account
                             // We do it for both registration and new login as long as cross-signing does not exist yet
                             if let password = self.password, !password.isEmpty {
-                                MXLog.debug("[AuthenticationCoordinator] sessionStateDidChange: Bootstrap with password")
+                                MXLog.debug("[LegacyAuthenticationCoordinator] sessionStateDidChange: Bootstrap with password")
                                 
                                 crossSigning.setup(withPassword: password) {
-                                    MXLog.debug("[AuthenticationCoordinator] sessionStateDidChange: Bootstrap succeeded")
+                                    MXLog.debug("[LegacyAuthenticationCoordinator] sessionStateDidChange: Bootstrap succeeded")
                                     self.authenticationDidComplete()
                                 } failure: { error in
-                                    MXLog.error("[AuthenticationCoordinator] sessionStateDidChange: Bootstrap failed. Error: \(error)")
+                                    MXLog.error("[LegacyAuthenticationCoordinator] sessionStateDidChange: Bootstrap failed. Error: \(error)")
                                     crypto.setOutgoingKeyRequestsEnabled(true, onComplete: nil)
                                     self.authenticationDidComplete()
                                 }
                             } else {
                                 // Try to setup cross-signing without authentication parameters in case if a grace period is enabled
                                 self.crossSigningService.setupCrossSigningWithoutAuthentication(for: session) {
-                                    MXLog.debug("[AuthenticationCoordinator] sessionStateDidChange: Bootstrap succeeded without credentials")
+                                    MXLog.debug("[LegacyAuthenticationCoordinator] sessionStateDidChange: Bootstrap succeeded without credentials")
                                     self.authenticationDidComplete()
                                 } failure: { error in
-                                    MXLog.error("[AuthenticationCoordinator] sessionStateDidChange: Do not know how to bootstrap cross-signing. Skip it.")
+                                    MXLog.error("[LegacyAuthenticationCoordinator] sessionStateDidChange: Do not know how to bootstrap cross-signing. Skip it.")
                                     crypto.setOutgoingKeyRequestsEnabled(true, onComplete: nil)
                                     self.authenticationDidComplete()
                                 }
@@ -208,21 +234,21 @@ final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtoc
                         }
                     case .crossSigningExists:
                         guard self.canPresentAdditionalScreens else {
-                            MXLog.debug("[AuthenticationCoordinator] sessionStateDidChange: Delaying presentCompleteSecurity during onboarding.")
+                            MXLog.debug("[LegacyAuthenticationCoordinator] sessionStateDidChange: Delaying presentCompleteSecurity during onboarding.")
                             self.isWaitingToPresentCompleteSecurity = true
                             return
                         }
                         
-                        MXLog.debug("[AuthenticationCoordinator] sessionStateDidChange: Complete security")
+                        MXLog.debug("[LegacyAuthenticationCoordinator] sessionStateDidChange: Complete security")
                         self.presentCompleteSecurity()
                     default:
-                        MXLog.debug("[AuthenticationCoordinator] sessionStateDidChange: Nothing to do")
+                        MXLog.debug("[LegacyAuthenticationCoordinator] sessionStateDidChange: Nothing to do")
                         
                         crypto.setOutgoingKeyRequestsEnabled(true, onComplete: nil)
                         self.authenticationDidComplete()
                     }
                 } failure: { [weak self] error in
-                    MXLog.error("[AuthenticationCoordinator] sessionStateDidChange: Fail to refresh crypto state with error: \(error)")
+                    MXLog.error("[LegacyAuthenticationCoordinator] sessionStateDidChange: Fail to refresh crypto state with error: \(error)")
                     crypto.setOutgoingKeyRequestsEnabled(true, onComplete: nil)
                     self?.authenticationDidComplete()
                 }
@@ -234,6 +260,7 @@ final class AuthenticationCoordinator: NSObject, AuthenticationCoordinatorProtoc
 }
 
 // MARK: - AuthenticationViewControllerDelegate
+@available(iOS 14.0, *)
 extension AuthenticationCoordinator: AuthenticationViewControllerDelegate {
     func authenticationViewController(_ authenticationViewController: AuthenticationViewController!, didLoginWith session: MXSession!, andPassword password: String!) {
         registerSessionStateChangeNotification(for: session)
@@ -249,11 +276,12 @@ extension AuthenticationCoordinator: AuthenticationViewControllerDelegate {
 }
 
 // MARK: - KeyVerificationCoordinatorDelegate
+@available(iOS 14.0, *)
 extension AuthenticationCoordinator: KeyVerificationCoordinatorDelegate {
     func keyVerificationCoordinatorDidComplete(_ coordinator: KeyVerificationCoordinatorType, otherUserId: String, otherDeviceId: String) {
         if let crypto = session?.crypto,
            !crypto.backup.hasPrivateKeyInCryptoStore || !crypto.backup.enabled {
-            MXLog.debug("[AuthenticationCoordinator][MXKeyVerification] requestAllPrivateKeys: Request key backup private keys")
+            MXLog.debug("[LegacyAuthenticationCoordinator][MXKeyVerification] requestAllPrivateKeys: Request key backup private keys")
             crypto.setOutgoingKeyRequestsEnabled(true, onComplete: nil)
         }
         
@@ -270,9 +298,42 @@ extension AuthenticationCoordinator: KeyVerificationCoordinatorDelegate {
 }
 
 // MARK: - UIAdaptivePresentationControllerDelegate
+@available(iOS 14.0, *)
 extension AuthenticationCoordinator: UIAdaptivePresentationControllerDelegate {
     func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
         // Prevent Key Verification from using swipe to dismiss
+        return false
+    }
+}
+
+
+
+// MARK: - Unused conformances
+@available(iOS 14.0, *)
+extension AuthenticationCoordinator {
+    var customServerFieldsVisible: Bool {
+        get { false }
+        set { /* no-op */ }
+    }
+    
+    func update(authenticationType: MXKAuthenticationType) {
+        // unused
+    }
+    
+    func update(externalRegistrationParameters: [AnyHashable: Any]) {
+        // unused
+    }
+    
+    func update(softLogoutCredentials: MXCredentials) {
+        // unused
+    }
+    
+    func updateHomeserver(_ homeserver: String?, andIdentityServer identityServer: String?) {
+        // unused
+    }
+    
+    func continueSSOLogin(withToken loginToken: String, transactionID: String) -> Bool {
+        #warning("To be implemented elsewhere")
         return false
     }
 }
