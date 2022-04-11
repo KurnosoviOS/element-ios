@@ -62,6 +62,8 @@ final class PresenceIndicatorView: UIView {
     /// - Parameters:
     ///   - presence: `MXPresence` to display
     func setPresence(_ presence: MXPresence) {
+        // TODO: probably in newer version of MatrixSDK
+        /*
         switch presence {
         case .online:
             self.backgroundColor = ThemeService.shared().theme.tintColor
@@ -73,6 +75,7 @@ final class PresenceIndicatorView: UIView {
             self.backgroundColor = UIColor.clear
             self.borderLayer.borderColor = UIColor.clear.cgColor
         }
+         */
     }
 }
     

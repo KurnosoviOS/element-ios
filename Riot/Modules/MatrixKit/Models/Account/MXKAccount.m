@@ -715,7 +715,9 @@ static NSArray<NSNumber*> *initialSyncSilentErrorsHTTPStatusCodes;
     
     // Instantiate new session
     mxSession = [[MXSession alloc] initWithMatrixRestClient:mxRestClient];
-    mxSession.preferredSyncPresence = self.preferredSyncPresence;
+    
+    // TODO: probably in newer version of MatrixSDK
+    //mxSession.preferredSyncPresence = self.preferredSyncPresence;
     
     // Check whether an antivirus url is defined.
     if (_antivirusServerURL)
@@ -2170,7 +2172,8 @@ static NSArray<NSNumber*> *initialSyncSilentErrorsHTTPStatusCodes;
     
     if (self.mxSession)
     {
-        self.mxSession.preferredSyncPresence = preferredSyncPresence;
+        // TODO: probably in newer version of MatrixSDK
+        //self.mxSession.preferredSyncPresence = preferredSyncPresence;
         [self setUserPresence:preferredSyncPresence andStatusMessage:nil completion:nil];
     }
     

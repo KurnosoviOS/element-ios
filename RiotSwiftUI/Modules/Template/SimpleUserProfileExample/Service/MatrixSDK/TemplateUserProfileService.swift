@@ -75,11 +75,11 @@ fileprivate extension TemplateUserProfilePresence {
     
     init(mxPresence: MXPresence) {
         switch mxPresence {
-        case .online:
+        case MXPresenceOnline:
             self = .online
-        case .unavailable:
+        case MXPresenceUnavailable:
             self = .idle
-        case .offline, .unknown:
+        case MXPresenceOffline, MXPresenceUnknown:
             self = .offline
         default:
             self = .offline
