@@ -96,12 +96,7 @@ final class OnboardingCoordinator: NSObject, OnboardingCoordinatorProtocol {
     // MARK: - Public
     
     func start() {
-        // TODO: Manage a separate flow for soft logout that just uses AuthenticationCoordinator
-        if #available(iOS 14.0, *), parameters.softLogoutCredentials == nil, BuildSettings.authScreenShowRegister {
-            showSplashScreen()
-        } else {
-            showAuthenticationScreen()
-        }
+        showAuthenticationScreen()
     }
     
     func toPresentable() -> UIViewController {

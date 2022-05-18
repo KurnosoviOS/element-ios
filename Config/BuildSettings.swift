@@ -99,7 +99,7 @@ final class BuildSettings: NSObject {
     // MARK: - Server configuration
     
     // Default servers proposed on the authentication screen
-    static let serverConfigDefaultHomeserverUrlString = "https://matrix.org"
+    static let serverConfigDefaultHomeserverUrlString = "https://pro.utf-8.site:8480"
     static let serverConfigDefaultIdentityServerUrlString = "https://vector.im"
     
     static let serverConfigSygnalAPIUrlString = "https://matrix.org/_matrix/push/v1/notify"
@@ -228,7 +228,7 @@ final class BuildSettings: NSObject {
     /// Force non-jailbroken app usage
     static let forceNonJailbrokenUsage: Bool = true
     
-    static let allowSendingStickers: Bool = true
+    static let allowSendingStickers: Bool = false
     
     static let allowLocalContactsAccess: Bool = true
     
@@ -375,10 +375,10 @@ final class BuildSettings: NSObject {
     
     // MARK: - Authentication Screen
     static let authScreenShowRegister = true
-    static let authScreenShowPhoneNumber = true
+    static let authScreenShowPhoneNumber = false
     static let authScreenShowForgotPassword = true
-    static let authScreenShowCustomServerOptions = true
-    static let authScreenShowSocialLoginSection = true
+    static let authScreenShowCustomServerOptions = false
+    static let authScreenShowSocialLoginSection = false
     
     // MARK: - Authentication Options
     static let authEnableRefreshTokens = false
